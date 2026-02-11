@@ -64,12 +64,13 @@ def send_content(socket, id, offset, length, addr)
 end
 
 # Data structure to keep track of requests
-@requests = {}
+$requests = {}
 # Function to request content
 def request_content(socket, id, peers, offset = 0)
-  return if @requests[id] && @requests[id][:offset] > offset
-  @requests[id] = { offset: offset, peers: peers }
-  peer = peers.to_a.sample
+  return if $requests[id] && $requests[id][:offset] > offset
+  peer = $requests[id][:peer] if $requests[id]
+  peer ||= peers.to_a.sample
+  $requests[id] = { offset: offset, peers: peers, peer: peer }
   host, port = peer
   msg = [{PleaseSendContent: {
     id: id,
@@ -82,9 +83,8 @@ end
 
                             
 
-
 # Function to handle content
-def handle_content(id, base64, offset, eof, socket, peers)
+def handle_content(id, base64, offset, eof, socket, addr, peers)
   Dir.mkdir('downloads') unless Dir.exist?('downloads')
   filename = "downloads/#{id}"
   File.open(filename, 'ab') do |f|
@@ -93,12 +93,14 @@ def handle_content(id, base64, offset, eof, socket, peers)
   end
   if offset + Base64.decode64(base64).size >= eof
     puts "Download of #{id} complete!"
-    @requests.delete(id)
+    $requests.delete(id)
   else
-    @requests[id][:offset] = offset + 4096
+    $requests[id][:offset] = offset + 4096
+    $requests[id][:peer] = [addr[3], addr[1]]
     request_content(socket, id, peers, offset + 4096)
   end
 end
+
 
 
 
@@ -142,7 +144,7 @@ loop do
           base64 = msg.first[:Content][:base64]
           offset = msg.first[:Content][:offset]
           eof = msg.first[:Content][:eof]
-          handle_content(id, base64, offset, eof, socket, peers)
+		  handle_content(id, base64, offset, eof, socket, addr, peers)
         end
       end
     rescue JSON::ParserError => e
