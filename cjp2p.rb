@@ -1,5 +1,4 @@
 #!/usr/bin/ruby
-# vim: set expandtab shiftwidth=2
 require 'socket'
 require 'json'
 require 'ipaddr'
@@ -42,7 +41,6 @@ def send_peers(socket, peers, addr)
 end
 
                           
-# Function to send content
 def send_content(socket, id, offset, length, addr)
   filename = "shared/#{id}"
   return if id.include?('/') # security check
@@ -51,7 +49,7 @@ def send_content(socket, id, offset, length, addr)
       f.seek(offset)
       data = f.read(length)
       file_size = f.size
-      encoded_data = Base64.strict_encode64(data).strip
+      encoded_data = Base64.strict_encode64(data)
       msg = [{Content: {
         id: id,
         base64: encoded_data,
@@ -59,21 +57,56 @@ def send_content(socket, id, offset, length, addr)
         offset: offset
       }}].to_json
       socket.send(msg, 0, addr[3], addr[1])
-	  puts "sent " + offset.to_s
     end
   rescue Errno::ENOENT
     # file not found, ignore
   end
 end
 
+# Function to request content
+def request_content(socket, id, peers, offset = 0)
+  peer = peers.to_a.sample
+  host, port = peer
+  msg = [{PleaseSendContent: {
+    id: id,
+    length: 4096,
+    offset: offset
+  }}].to_json
+  puts "requesting " + offset.to_s + " from " + host.to_s
+  socket.send(msg, 0, host.to_s, port)
+end
+
+
+# Function to handle content
+def handle_content(id, base64, offset, eof, socket, peers)
+  Dir.mkdir('downloads') unless Dir.exist?('downloads')
+  filename = "downloads/#{id}"
+  File.open(filename, 'ab') do |f|
+    f.seek(offset)
+    f.write(Base64.decode64(base64))
+  end
+  if offset + Base64.decode64(base64).size >= eof
+    puts "Download of #{id} complete! #{eof.to_s} bytes"
+  else
+    request_content(socket, id, peers, offset + 4096)
+  end
+end
+
+
+id = ARGV[0]
 
 loop do
   # Send request for peers occasionally
   send_request(socket, peers)
 
+  if id && peers.size > 0
+    request_content(socket, id, peers)
+    id = nil # only request once
+  end
+
   # Set a timeout of 1 second
   if IO.select([socket], nil, nil, 1)
-    data, addr = socket.recvfrom(1024)
+    data, addr = socket.recvfrom(8192)
     begin
       msg = JSON.parse(data, symbolize_names: true)
       if msg.is_a?(Array) && msg.first.is_a?(Hash)
@@ -94,6 +127,13 @@ loop do
             ip = IPAddr.new(host)
             peers << [ip, port.to_i]
           end
+        elsif msg.first[:Content]
+          # Handle content
+          id = msg.first[:Content][:id]
+          base64 = msg.first[:Content][:base64]
+          offset = msg.first[:Content][:offset]
+          eof = msg.first[:Content][:eof]
+          handle_content(id, base64, offset, eof, socket, peers)
         end
       end
     rescue JSON::ParserError => e
@@ -101,4 +141,3 @@ loop do
     end
   end
 end
-
