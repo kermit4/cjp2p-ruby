@@ -63,8 +63,12 @@ def send_content(socket, id, offset, length, addr)
   end
 end
 
+# Data structure to keep track of requests
+@requests = {}
 # Function to request content
 def request_content(socket, id, peers, offset = 0)
+  return if @requests[id] && @requests[id][:offset] > offset
+  @requests[id] = { offset: offset, peers: peers }
   peer = peers.to_a.sample
   host, port = peer
   msg = [{PleaseSendContent: {
@@ -72,9 +76,11 @@ def request_content(socket, id, peers, offset = 0)
     length: 4096,
     offset: offset
   }}].to_json
-  puts "requesting " + offset.to_s + " from " + host.to_s
   socket.send(msg, 0, host.to_s, port)
+  puts "requesting " + offset.to_s + " from " + host.to_s
 end
+
+                            
 
 
 # Function to handle content
@@ -86,11 +92,14 @@ def handle_content(id, base64, offset, eof, socket, peers)
     f.write(Base64.decode64(base64))
   end
   if offset + Base64.decode64(base64).size >= eof
-    puts "Download of #{id} complete! #{eof.to_s} bytes"
+    puts "Download of #{id} complete!"
+    @requests.delete(id)
   else
+    @requests[id][:offset] = offset + 4096
     request_content(socket, id, peers, offset + 4096)
   end
 end
+
 
 
 id = ARGV[0]
