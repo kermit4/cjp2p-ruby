@@ -109,6 +109,10 @@ end
 
 
 
+def return_message(socket, addr, msg)
+  msg = [{ReturnedMessage: msg}].to_json
+  socket.send(msg, 0, addr[3], addr[1])
+end
 
 
 $peer_request_time = Time.now - 20
@@ -168,6 +172,9 @@ loop do
           offset = msg.first[:Content][:offset]
           eof = msg.first[:Content][:eof]
 		  handle_content(id, base64, offset, eof, socket, addr)
+        elsif msg.first[:PleaseReturnThisMessage]
+          # Respond with peers
+          return_message(socket, addr, msg.first[:PleaseReturnThisMessage])
         end
       end
     rescue JSON::ParserError => e
