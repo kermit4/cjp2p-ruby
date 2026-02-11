@@ -32,21 +32,35 @@ def send_request(socket, peers)
   socket.send(msg, 0, host.to_s, port)
 end
 
+# Function to send peers
+def send_peers(socket, peers, addr)
+  peer_list = peers.map { |peer| "#{peer.first}:#{peer.last}" }
+  msg = [{Peers: {peers: peer_list}}].to_json
+  host, port = addr[3],addr[1]
+  socket.send(msg, 0, host, port)
+end
+
 loop do
-  # Send request for peers occasionally
+                                       
   send_request(socket, peers)
 
-  # Set a timeout of 1 second
+                             
   if IO.select([socket], nil, nil, 1)
     data, addr = socket.recvfrom(1024)
     begin
       msg = JSON.parse(data, symbolize_names: true)
-      if msg.is_a?(Array) && msg.first.is_a?(Hash) && msg.first[:Peers]
-        msg.first[:Peers][:peers].each do |peer|
-          # Parse host:port pair
-          host, port = peer.split(':')
-          ip = IPAddr.new(host)
-          peers << [ip, port.to_i]
+      if msg.is_a?(Array) && msg.first.is_a?(Hash)
+        if msg.first[:PleaseSendPeers]
+                              
+          send_peers(socket, peers, addr)
+        elsif msg.first[:Peers]
+                                 
+          msg.first[:Peers][:peers].each do |peer|
+                                  
+            host, port = peer.split(':')
+            ip = IPAddr.new(host)
+            peers << [ip, port.to_i]
+          end
         end
       end
     rescue JSON::ParserError => e
@@ -54,4 +68,3 @@ loop do
     end
   end
 end
-
