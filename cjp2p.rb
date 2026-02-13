@@ -4,6 +4,7 @@ require 'json'
 require 'ipaddr'
 require 'set'
 require 'base64'
+require 'fileutils'
 
 # Use a Set to store unique peers
 $peers = Set.new
@@ -94,8 +95,8 @@ end
 
 # Function to handle content
 def handle_content(id, base64, offset, eof, socket, addr)
-  Dir.mkdir('downloads') unless Dir.exist?('downloads')
-  filename = "downloads/#{id}"
+  Dir.mkdir('incoming') unless Dir.exist?('incoming')
+  filename = "incoming/#{id}"
   File.open(filename, 'ab') do |f|
     f.seek(offset)
     f.write(Base64.decode64(base64))
@@ -104,6 +105,7 @@ def handle_content(id, base64, offset, eof, socket, addr)
   if offset + Base64.decode64(base64).size >= eof
     puts "Download of #{id} complete!"
     $requests.delete(id)
+    File.rename("incoming/#{id}","shared/#{id}")
   else
     $requests[id][:offset] = offset + 4096
     $requests[id][:peer] = [addr[3], addr[1]]
@@ -128,6 +130,7 @@ if id && $peers.size > 0
   id = nil # only request once
 end
 
+FileUtils.mkdir_p 'shared'
 loop do
   # Check for stalled transfers and retry
   $requests.each do |id, request|

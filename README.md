@@ -10,5 +10,3 @@ PleaseReturnThisMessage receive
 ReturnedMessage send
 
 
-
-It can share peers and send and receive files
