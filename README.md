@@ -10,3 +10,9 @@ PleaseReturnThisMessage receive
 ReturnedMessage send
 
 
+
+
+# todo
+
+- support more than one block in flight 
+- send content for files not complete yet

@@ -95,17 +95,20 @@ end
 
 # Function to handle content
 def handle_content(id, base64, offset, eof, socket, addr)
-  Dir.mkdir('incoming') unless Dir.exist?('incoming')
+  return if not $requests[id]
+  return if $requests[id][:offset] > offset
   filename = "incoming/#{id}"
-  File.open(filename, 'ab') do |f|
+  File.open(filename, 'r+') do |f|
     f.seek(offset)
     f.write(Base64.decode64(base64))
+  rescue 
+    return
   end
   $requests[id][:timestamp] = Time.now # update timestamp
-  if offset + Base64.decode64(base64).size >= eof
+  if eof and offset + Base64.decode64(base64).size >= eof
     puts "Download of #{id} complete!"
     $requests.delete(id)
-    File.rename("incoming/#{id}","shared/#{id}")
+    File.rename("incoming/#{id}","#{id}")
   else
     $requests[id][:offset] = offset + 4096
     $requests[id][:peer] = [addr[3], addr[1]]
@@ -123,14 +126,16 @@ end
 
 $peer_request_time = Time.now - 20
 
+FileUtils.mkdir_p 'shared/incoming'
+Dir.chdir 'shared'
 
 id = ARGV[0]
-if id && $peers.size > 0
+if id 
   request_content(socket, id)
-  id = nil # only request once
+  filename = "incoming/#{id}"
+  File.open(filename, 'w+');
 end
 
-FileUtils.mkdir_p 'shared'
 loop do
   # Check for stalled transfers and retry
   $requests.each do |id, request|
@@ -153,6 +158,7 @@ loop do
   if IO.select([socket], nil, nil, 1)
     data, addr = socket.recvfrom(8192)
     begin
+      $peers << [addr[3], addr[1]]
       msg = JSON.parse(data, symbolize_names: true)
       if msg.is_a?(Array) && msg.first.is_a?(Hash)
         if msg.first[:PleaseSendPeers]
