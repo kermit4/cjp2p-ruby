@@ -49,16 +49,20 @@ def send_content(socket, id, offset, length, addr)
     File.open(filename, 'rb') do |f|
       f.seek(offset)
       data = f.read(length)
-      file_size = f.size
+      eof = f.size
+      if offset >= eof
+        return
+      end
       encoded_data = Base64.strict_encode64(data)
       msg = [{Content: {
         id: id,
         base64: encoded_data,
-        eof: file_size,
+        eof: eof,
         offset: offset
       }}].to_json
       socket.send(msg, 0, addr[3], addr[1])
     end
+    puts "sent + #{id} #{offset} to #{addr[3]}:#{addr[1]}"
   rescue Errno::ENOENT
     # file not found, ignore
   end
@@ -175,10 +179,12 @@ loop do
         elsif msg.first[:PleaseReturnThisMessage]
           # Respond with peers
           return_message(socket, addr, msg.first[:PleaseReturnThisMessage])
+        else
+          puts "unknows message #{msg}"
         end
       end
     rescue JSON::ParserError => e
-      puts "Error parsing JSON: #{e.message}"
+      puts "Error parsing JSON: #{e.message} for  #{msg}"
     end
   end
 end
