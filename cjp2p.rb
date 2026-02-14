@@ -207,7 +207,7 @@ loop do
         end
       end
     rescue JSON::ParserError => e
-      puts "Error parsing JSON: #{e.message} for  #{msg}"
+      puts "Error parsing JSON: #{e.message} for  #{msgs}"
     end
   end
 end
