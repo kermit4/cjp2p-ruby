@@ -1,4 +1,5 @@
 #!/usr/bin/ruby
+# vim: set expandtab shiftwidth=2 tabstop=2:
 require 'socket'
 require 'json'
 require 'ipaddr'
@@ -8,6 +9,8 @@ require 'fileutils'
 
 # Use a Set to store unique peers
 $peers = Set.new
+$sent_packets = {} 
+$requests = {}
 
 # Add initial peers
 [
@@ -71,23 +74,22 @@ def send_content(socket, id, offset, length, addr)
   end
 end
 
-# Data structure to keep track of requests
-$requests = {}
 # Function to request content
 def request_content(socket, id, offset = 0)
   return if $requests[id] && $requests[id][:offset] > offset
-  peer = $requests[id][:peer] if $requests[id]
-  peer ||= $peers.to_a.sample
-  if ! $requests[id] 
-	$requests[id] = { offset: offset, peers: $peers, peer: peer, timestamp: Time.now }
+  if $requests[id] and $requests[id][:peer]
+    peer = $requests[id][:peer] 
+  else
+    peer = $peers.to_a.sample 
   end
+
   host, port = peer
-  msg = [{PleaseSendContent: {
-    id: id,
-    length: 4096,
-    offset: offset
-  }}].to_json
+  msg = [{PleaseSendContent: { id: id, length: 4096, offset: offset }}].to_json
   socket.send(msg, 0, host.to_s, port)
+  $sent_packets[id] ||= {}
+  $sent_packets[id][offset] ||= {}
+  $sent_packets[id][offset][:sent]=true
+  $sent_packets[id][offset][:timestamp] = Time.now 
   puts "requesting " + offset.to_s + " from " + host.to_s + ":" + port.to_s
 
 end
@@ -98,23 +100,40 @@ end
 # Function to handle content
 def handle_content(id, base64, offset, eof, socket, addr)
   return if not $requests[id]
-  return if $requests[id][:offset] > offset
+  $requests[id][:peer]=[addr[3],addr[1]]
   filename = "incoming/#{id}"
-  File.open(filename, 'r+') do |f|
-    f.seek(offset)
-    f.write(Base64.decode64(base64))
-  rescue 
-    return
-  end
   $requests[id][:timestamp] = Time.now # update timestamp
-  if eof and offset + Base64.decode64(base64).size >= eof
-    puts "Download of #{id} finished!"
-    $requests.delete(id)
-    File.rename("incoming/#{id}","#{id}")
+  if $sent_packets[id] && $sent_packets[id][offset] and
+    ! $sent_packets[id][0+offset][:received]
+      $sent_packets[id][0+offset][:received] = true
+      $requests[id][:f].seek(offset)
+      $requests[id][:bytes_complete] += $requests[id][:f].write(Base64.decode64(base64))
+      puts " complete #{$requests[id][:bytes_complete]} at #{offset} out of #{eof}"
+    if $requests[id][:bytes_complete] == eof
+      puts "Download of #{id} finished!"
+      $requests.delete(id)
+      File.rename("incoming/#{id}","#{id}")
+      return
+    end
   else
-    $requests[id][:offset] = offset + 4096
-    $requests[id][:peer] = [addr[3], addr[1]]
-    request_content(socket, id, offset + 4096)
+    puts "dup? #{offset}"
+  end
+
+  puts "received   #{offset}"
+  # Slide the window forward
+  $requests[id][:offset] += 4096
+  while $sent_packets[id] && $sent_packets[id][$requests[id][:offset]] && $sent_packets[id][$requests[id][:offset]][:received]
+    $requests[id][:offset] += 4096
+  end
+  $requests[id][:offset] = 0 if $requests[id][:offset] > eof
+  request_content(socket, id, $requests[id][:offset])
+
+  # Request an extra packet with a certain probability
+  if rand < 0.01
+    $requests[id][:offset] += 4096
+    $requests[id][:offset] =0 if $requests[id][:offset] > eof
+    puts "EXTRA #{$requests[id][:offset]}"
+    request_content(socket, id, $requests[id][:offset])
   end
 end
 
@@ -133,27 +152,27 @@ Dir.chdir 'shared'
 
 id = ARGV[0]
 if id 
-  request_content(socket, id)
   filename = "incoming/#{id}"
-  File.open(filename, 'w+');
+  $requests[id] = { offset: 0, peers: {}, peer: nil, timestamp: Time.now, f: File.open(filename, 'w+'),bytes_complete:0 }
+  request_content(socket, id)
 end
 
 loop do
   # Check for stalled transfers and retry
   $requests.each do |id, request|
   if Time.now - request[:timestamp] > 1 
-	puts "Retrying stalled transfer for #{id}..."
-	request_content(socket, id, request[:offset])
-	request_content(socket, id, request[:offset])
-	request_content(socket, id, request[:offset])
-    request[:peer] = $peers.to_a.sample
-	request_content(socket, id, request[:offset])
-    request[:peer] = $peers.to_a.sample
-	request_content(socket, id, request[:offset])
-    request[:peer] = $peers.to_a.sample
-	request_content(socket, id, request[:offset])
-    request[:peer] = $peers.to_a.sample
-	request_content(socket, id, request[:offset])
+    puts "Retrying stalled transfer for #{id}..."
+    request_content(socket, id, request[:offset])
+    request_content(socket, id, request[:offset])
+    request_content(socket, id, request[:offset])
+    $requests[id][:peer] = nil;
+    request_content(socket, id, request[:offset])
+    $requests[id][:peer] = nil;
+    request_content(socket, id, request[:offset])
+    $requests[id][:peer] = nil;
+    request_content(socket, id, request[:offset])
+    $requests[id][:peer] = nil;
+    request_content(socket, id, request[:offset])
     $requests[id][:timestamp] = Time.now # update timestamp
   end
   end
