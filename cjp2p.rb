@@ -103,7 +103,7 @@ def handle_content(id, base64, offset, eof, socket, addr)
     $requests[id][:bytes_complete] += $requests[id][:f].write(Base64.decode64(base64))
     #puts " complete #{$requests[id][:bytes_complete]} at #{offset} out of #{eof}"
     if $requests[id][:bytes_complete] == eof
-      #puts "Download of #{id} finished!"
+      puts "Download of #{id} finished!"
       $requests.delete(id)
       $sent_packets.delete(id)
       File.rename("incoming/#{id}","#{id}")
