@@ -44,10 +44,12 @@ end
 
                           
 def send_content(socket, id, offset, length, addr)
-  filename = "shared/#{id}"
+  filename = "#{id}"
   return if id.include?('/') # security check
+  puts "maybe sending #{id}"
   begin
     File.open(filename, 'rb') do |f|
+      puts "sending #{id}"
       f.seek(offset)
       data = f.read(length)
       eof = f.size
@@ -141,10 +143,18 @@ loop do
   $requests.each do |id, request|
   if Time.now - request[:timestamp] > 1 
 	puts "Retrying stalled transfer for #{id}..."
-	if Time.now - request[:timestamp] > 10
-	  request[:peer] = $peers.to_a.sample
-	end
 	request_content(socket, id, request[:offset])
+	request_content(socket, id, request[:offset])
+	request_content(socket, id, request[:offset])
+    request[:peer] = $peers.to_a.sample
+	request_content(socket, id, request[:offset])
+    request[:peer] = $peers.to_a.sample
+	request_content(socket, id, request[:offset])
+    request[:peer] = $peers.to_a.sample
+	request_content(socket, id, request[:offset])
+    request[:peer] = $peers.to_a.sample
+	request_content(socket, id, request[:offset])
+    $requests[id][:timestamp] = Time.now # update timestamp
   end
   end
 
@@ -159,37 +169,41 @@ loop do
     data, addr = socket.recvfrom(8192)
     begin
       $peers << [addr[3], addr[1]]
-      msg = JSON.parse(data, symbolize_names: true)
-      if msg.is_a?(Array) && msg.first.is_a?(Hash)
-        if msg.first[:PleaseSendPeers]
-          # Respond with peers
-          send_peers(socket, addr)
-        elsif msg.first[:PleaseSendContent]
-          # Respond with content
-          id = msg.first[:PleaseSendContent][:id]
-          offset = msg.first[:PleaseSendContent][:offset]
-          length = msg.first[:PleaseSendContent][:length]
-          send_content(socket, id, offset, length, addr)
-        elsif msg.first[:Peers]
-          # Handle incoming peers
-          msg.first[:Peers][:peers].each do |peer|
-            # Parse host:port pair
-            host, port = peer.split(':')
-            ip = IPAddr.new(host)
-            $peers << [ip, port.to_i]
+      msgs = JSON.parse(data, symbolize_names: true)
+      if msgs.is_a?(Array) 
+        msgs.each do |msg|
+          if msg.is_a?(Hash)
+            if msg[:PleaseSendPeers]
+              # Respond with peers
+              send_peers(socket, addr)
+            elsif msg[:PleaseSendContent]
+              # Respond with content
+              id = msg[:PleaseSendContent][:id]
+              offset = msg[:PleaseSendContent][:offset]
+              length = msg[:PleaseSendContent][:length]
+              send_content(socket, id, offset, length, addr)
+            elsif msg[:Peers]
+              # Handle incoming peers
+              msg[:Peers][:peers].each do |peer|
+                # Parse host:port pair
+                host, port = peer.split(':')
+                ip = IPAddr.new(host)
+                $peers << [ip, port.to_i]
+              end
+            elsif msg[:Content]
+              # Handle content
+              id = msg[:Content][:id]
+              base64 = msg[:Content][:base64]
+              offset = msg[:Content][:offset]
+              eof = msg[:Content][:eof]
+              handle_content(id, base64, offset, eof, socket, addr)
+            elsif msg[:PleaseReturnThisMessage]
+              # Respond with peers
+              return_message(socket, addr, msg[:PleaseReturnThisMessage])
+            else
+              puts "unknown message #{msg}"
+            end
           end
-        elsif msg.first[:Content]
-          # Handle content
-          id = msg.first[:Content][:id]
-          base64 = msg.first[:Content][:base64]
-          offset = msg.first[:Content][:offset]
-          eof = msg.first[:Content][:eof]
-		  handle_content(id, base64, offset, eof, socket, addr)
-        elsif msg.first[:PleaseReturnThisMessage]
-          # Respond with peers
-          return_message(socket, addr, msg.first[:PleaseReturnThisMessage])
-        else
-          puts "unknows message #{msg}"
         end
       end
     rescue JSON::ParserError => e
