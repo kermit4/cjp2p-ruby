@@ -26,14 +26,12 @@ socket.bind('0.0.0.0', 24257)
 # Allow broadcasting
 socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_BROADCAST, true)
 
-puts "Listening on UDP port 24257..."
-
 # Function to send request for peers
 def send_request(socket)
   return if $peers.empty?
   peer = $peers.to_a.sample
   host, port = peer
-  puts "requesting peers" + " from " + host.to_s + ":" + port.to_s
+  #puts "requesting peers" + " from " + host.to_s + ":" + port.to_s
   msg = [{PleaseSendPeers:{}}].to_json
   socket.send(msg, 0, host.to_s, port)
 end
@@ -48,10 +46,8 @@ end
 def send_content(socket, id, offset, length, addr)
   filename = "#{id}"
   return if id.include?('/') # security check
-  puts "maybe sending #{id}"
   begin
     File.open(filename, 'rb') do |f|
-      puts "sending #{id}"
       f.seek(offset)
       data = f.read(length)
       eof = f.size
@@ -67,7 +63,7 @@ def send_content(socket, id, offset, length, addr)
       }}].to_json
       socket.send(msg, 0, addr[3], addr[1])
     end
-    puts "sent + #{id} #{offset} to #{addr[3]}:#{addr[1]}"
+    #puts "sent + #{id} #{offset} to #{addr[3]}:#{addr[1]}"
   rescue Errno::ENOENT
     # file not found, ignore
   end
@@ -89,7 +85,7 @@ def request_content(socket, id, offset = 0)
   $sent_packets[id][offset] ||= {}
   $sent_packets[id][offset][:sent]=true
   $sent_packets[id][offset][:timestamp] = Time.now 
-  puts "requesting " + offset.to_s + " from " + host.to_s + ":" + port.to_s
+  #puts "requesting " + offset.to_s + " from " + host.to_s + ":" + port.to_s
 
 end
 
@@ -106,18 +102,17 @@ def handle_content(id, base64, offset, eof, socket, addr)
     $sent_packets[id][0+offset][:received] = true
     $requests[id][:f].seek(offset)
     $requests[id][:bytes_complete] += $requests[id][:f].write(Base64.decode64(base64))
-    puts " complete #{$requests[id][:bytes_complete]} at #{offset} out of #{eof}"
+    #puts " complete #{$requests[id][:bytes_complete]} at #{offset} out of #{eof}"
     if $requests[id][:bytes_complete] == eof
-      puts "Download of #{id} finished!"
+      #puts "Download of #{id} finished!"
       $requests.delete(id)
       File.rename("incoming/#{id}","#{id}")
       return
     end
-  else
-    puts "dup? #{offset}"
+  #else puts "dup? #{offset}"
   end
 
-  puts "received   #{offset}"
+  #puts "received   #{offset}"
   # Slide the window forward
   $requests[id][:offset] += 4096
   while $sent_packets[id] && $sent_packets[id][$requests[id][:offset]] && $sent_packets[id][$requests[id][:offset]][:received]
@@ -130,7 +125,7 @@ def handle_content(id, base64, offset, eof, socket, addr)
   if rand < 0.01
     $requests[id][:offset] += 4096
     $requests[id][:offset] =0 if $requests[id][:offset] > eof
-    puts "EXTRA #{$requests[id][:offset]}"
+    #puts "EXTRA #{$requests[id][:offset]}"
     request_content(socket, id, $requests[id][:offset])
   end
 end
