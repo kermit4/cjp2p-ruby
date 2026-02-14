@@ -108,7 +108,7 @@ def handle_content(id, base64, offset, eof, socket, addr)
   end
   $requests[id][:timestamp] = Time.now # update timestamp
   if eof and offset + Base64.decode64(base64).size >= eof
-    puts "Download of #{id} complete!"
+    puts "Download of #{id} finished!"
     $requests.delete(id)
     File.rename("incoming/#{id}","#{id}")
   else
