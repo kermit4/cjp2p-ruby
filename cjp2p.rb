@@ -45,7 +45,6 @@ def send_peers(socket, addr)
   socket.send(msg, 0, addr[3], addr[1])
 end
 
-                          
 def send_content(socket, id, offset, length, addr)
   filename = "#{id}"
   return if id.include?('/') # security check
@@ -95,7 +94,6 @@ def request_content(socket, id, offset = 0)
 end
 
 
-                            
 
 # Function to handle content
 def handle_content(id, base64, offset, eof, socket, addr)
@@ -105,10 +103,10 @@ def handle_content(id, base64, offset, eof, socket, addr)
   $requests[id][:timestamp] = Time.now # update timestamp
   if $sent_packets[id] && $sent_packets[id][offset] and
     ! $sent_packets[id][0+offset][:received]
-      $sent_packets[id][0+offset][:received] = true
-      $requests[id][:f].seek(offset)
-      $requests[id][:bytes_complete] += $requests[id][:f].write(Base64.decode64(base64))
-      puts " complete #{$requests[id][:bytes_complete]} at #{offset} out of #{eof}"
+    $sent_packets[id][0+offset][:received] = true
+    $requests[id][:f].seek(offset)
+    $requests[id][:bytes_complete] += $requests[id][:f].write(Base64.decode64(base64))
+    puts " complete #{$requests[id][:bytes_complete]} at #{offset} out of #{eof}"
     if $requests[id][:bytes_complete] == eof
       puts "Download of #{id} finished!"
       $requests.delete(id)
@@ -160,27 +158,27 @@ end
 loop do
   # Check for stalled transfers and retry
   $requests.each do |id, request|
-  if Time.now - request[:timestamp] > 1 
-    puts "Retrying stalled transfer for #{id}..."
-    request_content(socket, id, request[:offset])
-    request_content(socket, id, request[:offset])
-    request_content(socket, id, request[:offset])
-    $requests[id][:peer] = nil;
-    request_content(socket, id, request[:offset])
-    $requests[id][:peer] = nil;
-    request_content(socket, id, request[:offset])
-    $requests[id][:peer] = nil;
-    request_content(socket, id, request[:offset])
-    $requests[id][:peer] = nil;
-    request_content(socket, id, request[:offset])
-    $requests[id][:timestamp] = Time.now # update timestamp
-  end
+    if Time.now - request[:timestamp] > 1 
+      puts "Retrying stalled transfer for #{id}..."
+      request_content(socket, id, request[:offset])
+      request_content(socket, id, request[:offset])
+      request_content(socket, id, request[:offset])
+      $requests[id][:peer] = nil;
+      request_content(socket, id, request[:offset])
+      $requests[id][:peer] = nil;
+      request_content(socket, id, request[:offset])
+      $requests[id][:peer] = nil;
+      request_content(socket, id, request[:offset])
+      $requests[id][:peer] = nil;
+      request_content(socket, id, request[:offset])
+      $requests[id][:timestamp] = Time.now # update timestamp
+    end
   end
 
   # Request peers periodically
   if Time.now - $peer_request_time > 10 # request peers every 10 seconds
-  $peer_request_time = Time.now
-  send_request(socket)
+    $peer_request_time = Time.now
+    send_request(socket)
   end
 
   # Set a timeout of 1 second
