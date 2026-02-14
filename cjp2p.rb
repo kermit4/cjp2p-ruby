@@ -83,7 +83,6 @@ def request_content(socket, id, offset = 0)
   socket.send(msg, 0, host.to_s, port)
   $sent_packets[id] ||= {}
   $sent_packets[id][offset] ||= {}
-  $sent_packets[id][offset][:sent]=true
   $sent_packets[id][offset][:timestamp] = Time.now 
   #puts "requesting " + offset.to_s + " from " + host.to_s + ":" + port.to_s
 
@@ -98,14 +97,15 @@ def handle_content(id, base64, offset, eof, socket, addr)
   filename = "incoming/#{id}"
   $requests[id][:timestamp] = Time.now # update timestamp
   if $sent_packets[id] && $sent_packets[id][offset] and
-    ! $sent_packets[id][0+offset][:received]
-    $sent_packets[id][0+offset][:received] = true
+    ! $sent_packets[id][offset][:received]
+    $sent_packets[id][offset][:received] = true
     $requests[id][:f].seek(offset)
     $requests[id][:bytes_complete] += $requests[id][:f].write(Base64.decode64(base64))
     #puts " complete #{$requests[id][:bytes_complete]} at #{offset} out of #{eof}"
     if $requests[id][:bytes_complete] == eof
       #puts "Download of #{id} finished!"
       $requests.delete(id)
+      $sent_packets.delete(id)
       File.rename("incoming/#{id}","#{id}")
       return
     end
