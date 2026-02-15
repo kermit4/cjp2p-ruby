@@ -44,17 +44,24 @@ def send_peers(socket, addr)
 end
 
 def send_content(socket, id, offset, length, addr)
-  filename = "#{id}"
   return if id.include?('/') # security check
   if $requests[id] 
     if $sent_packets[id] && $sent_packets[id][offset] and $sent_packets[id][offset][:received]
       f = $requests[id][:f]
       length = 4096 if length > 4096
       puts "relaying #{id}"
+    else
+      peer_list = $requests[id][:peers].map { |peer| "#{peer.first}:#{peer.last}" }
+      msg = [{MaybeTheyHaveSome: {
+        id: id,
+        peers: peer_list
+      }}].to_json
+      puts "sending #{msg}"
+      socket.send(msg, 0, addr[3], addr[1])
     end
   else
     begin
-      f = File.open(filename, 'rb')
+      f = File.open("#{id}", 'rb')
     rescue Errno::ENOENT
       # file not found, ignore
     end
@@ -103,6 +110,7 @@ end
 def handle_content(id, base64, offset, eof, socket, addr)
   return if not $requests[id]
   $requests[id][:lastPeer]=[addr[3],addr[1]]
+  $requests[id][:peers] << [addr[3], addr[1]]
   filename = "incoming/#{id}"
   $requests[id][:timestamp] = Time.now # update timestamp
   if $sent_packets[id] && $sent_packets[id][offset] and
@@ -155,7 +163,7 @@ Dir.chdir 'shared'
 id = ARGV[0]
 if id 
   filename = "incoming/#{id}"
-  $requests[id] = { offset: 0, peers: {}, peer: nil, timestamp: Time.now, f: File.open(filename, 'w+'),bytes_complete:0 }
+  $requests[id] = { offset: 0, peers: Set.new, peer: nil, timestamp: Time.now, f: File.open(filename, 'w+'),bytes_complete:0 }
   request_content(socket, id)
 end
 
