@@ -56,12 +56,15 @@ end
 def send_content(id, offset, length, addr)
   return if id.include?('/') # security check
   if r=$requests[id] 
-    if s=$sent_packets[id] && s[offset] and s[offset][:received]
+    if s=$sent_packets[id] and s[offset] and s[offset][:received]
       f = r[:f]
       length = 4096 if length > 4096
       puts "relaying #{id}"
     else
       maybe_they_have_some_send(r[:peers],addr)
+    end
+    if rand < 0.01
+       maybe_they_have_some_send(r[:peers],addr)
     end
   else
     begin
@@ -91,7 +94,7 @@ end
 
 # Function to request content
 def request_content(id, offset = 0)
-  return if $requests[id] && $requests[id][:offset] > offset
+  return if $requests[id] and $requests[id][:offset] > offset
   if $requests[id] and $requests[id][:lastPeer]
     peer = $requests[id][:lastPeer] 
   else
@@ -133,7 +136,7 @@ def handle_content(id, base64, offset, eof, addr)
   $requests[id][:peers] << [addr[3], addr[1]]
   filename = "incoming/#{id}"
   $requests[id][:timestamp] = Time.now # update timestamp
-  if $sent_packets[id] && $sent_packets[id][offset] and
+  if $sent_packets[id] and $sent_packets[id][offset] and
     ! $sent_packets[id][offset][:received]
     $sent_packets[id][offset][:received] = true
     $requests[id][:f].seek(offset)
@@ -152,7 +155,7 @@ def handle_content(id, base64, offset, eof, addr)
   #puts "received   #{offset}"
   # Slide the window forward
   $requests[id][:offset] += 4096
-  while $sent_packets[id] && $sent_packets[id][$requests[id][:offset]] && $sent_packets[id][$requests[id][:offset]][:received]
+  while $sent_packets[id] and $sent_packets[id][$requests[id][:offset]] and $sent_packets[id][$requests[id][:offset]][:received]
     $requests[id][:offset] += 4096
   end
   $requests[id][:offset] = 0 if $requests[id][:offset] > eof
