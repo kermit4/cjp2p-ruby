@@ -8,12 +8,11 @@ PleaseSendContent send/receive
 PleaseSendPeers send/receive
 PleaseReturnThisMessage receive
 ReturnedMessage send
-MaybeTheyHaveSome send
+MaybeTheyHaveSome send/receive
 
 
 
 
 # todo
 
-- MaybeTheyHaveSome receive
 - debugging levels  (Ruby Logger?)

@@ -107,7 +107,23 @@ end
 
 
 # Function to handle content
+def handle_content_suggestions(m)
+  id=m[:id]
+  return if not r= $requests[id]
+  puts "got content suggestions"
+  puts r[:peers]
+  puts $requests[id][:peers]
+  m[:peers].each do |peer|
+    # Parse host:port pair
+    host, port = peer.split(':')
+    ip = IPAddr.new(host)
+    r[:peers]  << [ip, port.to_i]
+  end
+  puts r[:peers]
+  puts $requests[id][:peers]
+end
 def handle_content(id, base64, offset, eof, socket, addr)
+
   return if not $requests[id]
   $requests[id][:lastPeer]=[addr[3],addr[1]]
   $requests[id][:peers] << [addr[3], addr[1]]
@@ -226,6 +242,9 @@ loop do
               offset = msg[:Content][:offset]
               eof = msg[:Content][:eof]
               handle_content(id, base64, offset, eof, socket, addr)
+            elsif m = msg[:MaybeTheyHaveSome]
+              # Handle content
+              handle_content_suggestions(m)
             elsif msg[:PleaseReturnThisMessage]
               # Respond with peers
               return_message(socket, addr, msg[:PleaseReturnThisMessage])
