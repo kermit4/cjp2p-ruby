@@ -44,13 +44,13 @@ def send_peers(addr)
 end
 
 def send_maybe_they_have_some(peers, addr, id)
-      peer_list = peers.map { |peer| "#{peer.first}:#{peer.last}" }
-      msg = [{MaybeTheyHaveSome: {
-        id: id,
-        peers: peer_list
-      }}].to_json
-      puts "sending #{msg}"
-      $socket.send(msg, 0, addr[3], addr[1])
+  peer_list = peers.map { |peer| "#{peer.first}:#{peer.last}" }
+  msg = [{MaybeTheyHaveSome: {
+    id: id,
+    peers: peer_list
+  }}].to_json
+  puts "sending #{msg}"
+  $socket.send(msg, 0, addr[3], addr[1])
 end
 
 def handle_please_send_content(id, offset, length, addr)
