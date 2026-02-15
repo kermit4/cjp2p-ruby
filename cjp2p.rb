@@ -43,7 +43,7 @@ def send_peers(addr)
   $socket.send(msg, 0, addr[3], addr[1])
 end
 
-def maybe_they_have_some_send(peers, addr)
+def maybe_they_have_some_send(peers, addr, id)
       peer_list = peers.map { |peer| "#{peer.first}:#{peer.last}" }
       msg = [{MaybeTheyHaveSome: {
         id: id,
@@ -61,10 +61,10 @@ def send_content(id, offset, length, addr)
       length = 4096 if length > 4096
       puts "relaying #{id}"
     else
-      maybe_they_have_some_send(r[:peers],addr)
+      maybe_they_have_some_send(r[:peers],addr,id)
     end
     if rand < 0.01
-       maybe_they_have_some_send(r[:peers],addr)
+       maybe_they_have_some_send(r[:peers],addr,id)
     end
   else
     begin
@@ -88,8 +88,8 @@ def send_content(id, offset, length, addr)
       offset: offset
     }}].to_json
     $socket.send(msg, 0, addr[3], addr[1])
+    puts "sent + #{id} #{offset} to #{addr[3]}:#{addr[1]}"
   end
-  puts "sent + #{id} #{offset} to #{addr[3]}:#{addr[1]}"
 end
 
 # Function to request content
@@ -144,6 +144,7 @@ def handle_content(id, base64, offset, eof, addr)
     #puts " complete #{$requests[id][:bytes_complete]} at #{offset} out of #{eof}"
     if $requests[id][:bytes_complete] == eof
       puts "Download of #{id} finished!"
+      $requests[id][:f].close()
       $requests.delete(id)
       $sent_packets.delete(id)
       File.rename("incoming/#{id}","#{id}")
