@@ -46,34 +46,43 @@ end
 def send_content(socket, id, offset, length, addr)
   filename = "#{id}"
   return if id.include?('/') # security check
-  begin
-    File.open(filename, 'rb') do |f|
-      f.seek(offset)
-      data = f.read(length)
-      eof = f.size
-      if offset >= eof
-        return
-      end
-      encoded_data = Base64.strict_encode64(data)
-      msg = [{Content: {
-        id: id,
-        base64: encoded_data,
-        eof: eof,
-        offset: offset
-      }}].to_json
-      socket.send(msg, 0, addr[3], addr[1])
+  if $requests[id] 
+    if $sent_packets[id] && $sent_packets[id][offset] and $sent_packets[id][offset][:received]
+      f = $requests[id][:f]
+      length = 4096 if length > 4096
+      puts "relaying #{id}"
     end
-    #puts "sent + #{id} #{offset} to #{addr[3]}:#{addr[1]}"
-  rescue Errno::ENOENT
-    # file not found, ignore
+  else
+    begin
+      f = File.open(filename, 'rb')
+    rescue Errno::ENOENT
+      # file not found, ignore
+    end
   end
+  if f
+    f.seek(offset)
+    data = f.read(length)
+    eof = f.size
+    if offset >= eof
+      return
+    end
+    encoded_data = Base64.strict_encode64(data)
+    msg = [{Content: {
+      id: id,
+      base64: encoded_data,
+      eof: eof,
+      offset: offset
+    }}].to_json
+    socket.send(msg, 0, addr[3], addr[1])
+  end
+  puts "sent + #{id} #{offset} to #{addr[3]}:#{addr[1]}"
 end
 
 # Function to request content
 def request_content(socket, id, offset = 0)
   return if $requests[id] && $requests[id][:offset] > offset
-  if $requests[id] and $requests[id][:peer]
-    peer = $requests[id][:peer] 
+  if $requests[id] and $requests[id][:lastPeer]
+    peer = $requests[id][:lastPeer] 
   else
     peer = $peers.to_a.sample 
   end
@@ -93,7 +102,7 @@ end
 # Function to handle content
 def handle_content(id, base64, offset, eof, socket, addr)
   return if not $requests[id]
-  $requests[id][:peer]=[addr[3],addr[1]]
+  $requests[id][:lastPeer]=[addr[3],addr[1]]
   filename = "incoming/#{id}"
   $requests[id][:timestamp] = Time.now # update timestamp
   if $sent_packets[id] && $sent_packets[id][offset] and
@@ -109,7 +118,7 @@ def handle_content(id, base64, offset, eof, socket, addr)
       File.rename("incoming/#{id}","#{id}")
       return
     end
-  #else puts "dup? #{offset}"
+    #else puts "dup? #{offset}"
   end
 
   #puts "received   #{offset}"
@@ -158,13 +167,13 @@ loop do
       request_content(socket, id, request[:offset])
       request_content(socket, id, request[:offset])
       request_content(socket, id, request[:offset])
-      $requests[id][:peer] = nil;
+      $requests[id][:lastPeer] = nil;
       request_content(socket, id, request[:offset])
-      $requests[id][:peer] = nil;
+      $requests[id][:lastPeer] = nil;
       request_content(socket, id, request[:offset])
-      $requests[id][:peer] = nil;
+      $requests[id][:lastPeer] = nil;
       request_content(socket, id, request[:offset])
-      $requests[id][:peer] = nil;
+      $requests[id][:lastPeer] = nil;
       request_content(socket, id, request[:offset])
       $requests[id][:timestamp] = Time.now # update timestamp
     end
