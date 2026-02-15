@@ -60,6 +60,7 @@ def send_content(id, offset, length, addr)
       f = r[:f]
       length = 4096 if length > 4096
       puts "relaying #{id}"
+      eof = r[:eof]
     else
       maybe_they_have_some_send(r[:peers],addr,id)
     end
@@ -69,24 +70,32 @@ def send_content(id, offset, length, addr)
   else
     begin
       f = File.open("#{id}", 'rb')
+      eof = f.size
     rescue Errno::ENOENT
       # file not found, ignore
     end
   end
   if f
-    f.seek(offset)
-    data = f.read(length)
-    eof = f.size
-    if offset >= eof
+    if offset >= f.size
       return
     end
+    f.seek(offset)
+    data = f.read(length)
     encoded_data = Base64.strict_encode64(data)
-    msg = [{Content: {
-      id: id,
-      base64: encoded_data,
-      eof: eof,
-      offset: offset
-    }}].to_json
+    if eof 
+      msg = [{Content: {
+        id: id,
+        base64: encoded_data,
+        eof: eof,
+        offset: offset
+      }}].to_json
+    else
+      msg = [{Content: {
+        id: id,
+        base64: encoded_data,
+        offset: offset
+      }}].to_json
+    end
     $socket.send(msg, 0, addr[3], addr[1])
     puts "sent + #{id} #{offset} to #{addr[3]}:#{addr[1]}"
   end
@@ -94,9 +103,9 @@ end
 
 # Function to request content
 def request_content(id, offset = 0)
-  return if $requests[id] and $requests[id][:offset] > offset
-  if $requests[id] and $requests[id][:lastPeer]
-    peer = $requests[id][:lastPeer] 
+  return if r = $requests[id] and r[:offset] > offset
+  if r and r[:lastPeer]
+    peer = r[:lastPeer] 
   else
     peer = $peers.to_a.sample 
   end
@@ -116,35 +125,31 @@ end
 # Function to handle content
 def handle_content_suggestions(m)
   id=m[:id]
-  return if not r= $requests[id]
+  return if not r = $requests[id]
   puts "got content suggestions"
-  puts r[:peers]
-  puts $requests[id][:peers]
   m[:peers].each do |peer|
-    # Parse host:port pair
     host, port = peer.split(':')
     ip = IPAddr.new(host)
     r[:peers]  << [ip, port.to_i]
   end
-  puts r[:peers]
-  puts $requests[id][:peers]
 end
 def handle_content(id, base64, offset, eof, addr)
 
-  return if not $requests[id]
-  $requests[id][:lastPeer]=[addr[3],addr[1]]
-  $requests[id][:peers] << [addr[3], addr[1]]
+  return if not r=$requests[id]
+  return if not s=$sent_packets[id]
+  r[:lastPeer]=[addr[3],addr[1]]
+  r[:peers] << [addr[3], addr[1]]
   filename = "incoming/#{id}"
-  $requests[id][:timestamp] = Time.now # update timestamp
-  if $sent_packets[id] and $sent_packets[id][offset] and
-    ! $sent_packets[id][offset][:received]
-    $sent_packets[id][offset][:received] = true
-    $requests[id][:f].seek(offset)
-    $requests[id][:bytes_complete] += $requests[id][:f].write(Base64.decode64(base64))
-    #puts " complete #{$requests[id][:bytes_complete]} at #{offset} out of #{eof}"
-    if $requests[id][:bytes_complete] == eof
+  r[:timestamp] = Time.now # update timestamp
+  if s[offset] and
+    ! s[offset][:received]
+    s[offset][:received] = true
+    r[:f].seek(offset)
+    r[:bytes_complete] += r[:f].write(Base64.decode64(base64))
+    #puts " complete #{r[:bytes_complete]} at #{offset} out of #{eof}"
+    if r[:bytes_complete] == eof
       puts "Download of #{id} finished!"
-      $requests[id][:f].close()
+      r[:f].close()
       $requests.delete(id)
       $sent_packets.delete(id)
       File.rename("incoming/#{id}","#{id}")
@@ -155,19 +160,19 @@ def handle_content(id, base64, offset, eof, addr)
 
   #puts "received   #{offset}"
   # Slide the window forward
-  $requests[id][:offset] += 4096
-  while $sent_packets[id] and $sent_packets[id][$requests[id][:offset]] and $sent_packets[id][$requests[id][:offset]][:received]
-    $requests[id][:offset] += 4096
+  r[:offset] += 4096
+  while s[r[:offset]] and s[r[:offset]][:received]
+    r[:offset] += 4096
   end
-  $requests[id][:offset] = 0 if $requests[id][:offset] > eof
-  request_content(id, $requests[id][:offset])
+  r[:offset] = 0 if r[:offset] > eof
+  request_content(id, r[:offset])
 
   # Request an extra packet with a certain probability
   if rand < 0.01
-    $requests[id][:offset] += 4096
-    $requests[id][:offset] =0 if $requests[id][:offset] > eof
-    #puts "EXTRA #{$requests[id][:offset]}"
-    request_content(id, $requests[id][:offset])
+    r[:offset] += 4096
+    r[:offset] =0 if r[:offset] > eof
+    #puts "EXTRA #{r[:offset]}"
+    request_content(id, r[:offset])
   end
 end
 
