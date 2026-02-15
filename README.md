@@ -1,5 +1,5 @@
 # cjp2p-ruby
-Ruby partial implementation of https://github.com/kermit4/cjp2p
+Ruby implementation of https://github.com/kermit4/cjp2p
 
 message types it can handle:
 Content send/receive
