@@ -49,18 +49,18 @@ def send_maybe_they_have_some(peers, addr, id)
     id: id,
     peers: peer_list
   }}].to_json
-  puts "sending #{msg}"
+  #puts "sending #{msg}"
   $socket.send(msg, 0, addr[3], addr[1])
 end
 
 def handle_please_send_content(id, offset, length, addr)
   return if id.include?('/') # security check
-  puts "#{addr[3]}:#{addr[1]} wants + #{id} #{offset} "
+  #puts "#{addr[3]}:#{addr[1]} wants + #{id} #{offset} "
   if r=$requests[id] 
     if s=$sent_packets[id] and s[offset] and s[offset][:received]
       f = r[:f]
       length = 4096 if length > 4096
-      puts "relaying #{id}"
+      #puts "relaying #{id}"
       eof = r[:eof]
       if rand < 0.01
         send_maybe_they_have_some(r[:peers],addr,id)
@@ -98,7 +98,7 @@ def handle_please_send_content(id, offset, length, addr)
       }}].to_json
     end
     $socket.send(msg, 0, addr[3], addr[1])
-    puts "sent + #{id} #{offset} to #{addr[3]}:#{addr[1]}"
+    #puts "sent + #{id} #{offset} to #{addr[3]}:#{addr[1]}"
   end
 end
 
