@@ -43,7 +43,7 @@ def send_peers(addr)
   $socket.send(msg, 0, addr[3], addr[1])
 end
 
-def maybe_they_have_some_send(peers, addr, id)
+def send_maybe_they_have_some(peers, addr, id)
       peer_list = peers.map { |peer| "#{peer.first}:#{peer.last}" }
       msg = [{MaybeTheyHaveSome: {
         id: id,
@@ -53,19 +53,20 @@ def maybe_they_have_some_send(peers, addr, id)
       $socket.send(msg, 0, addr[3], addr[1])
 end
 
-def send_content(id, offset, length, addr)
+def handle_please_send_content(id, offset, length, addr)
   return if id.include?('/') # security check
+  puts "#{addr[3]}:#{addr[1]} wants + #{id} #{offset} "
   if r=$requests[id] 
     if s=$sent_packets[id] and s[offset] and s[offset][:received]
       f = r[:f]
       length = 4096 if length > 4096
       puts "relaying #{id}"
       eof = r[:eof]
+      if rand < 0.01
+        send_maybe_they_have_some(r[:peers],addr,id)
+      end
     else
-      maybe_they_have_some_send(r[:peers],addr,id)
-    end
-    if rand < 0.01
-       maybe_they_have_some_send(r[:peers],addr,id)
+      send_maybe_they_have_some(r[:peers],addr,id)
     end
   else
     begin
@@ -123,15 +124,16 @@ end
 
 
 # Function to handle content
-def handle_content_suggestions(m)
+def handle_maybe_they_have_some(m)
   id=m[:id]
   return if not r = $requests[id]
-  puts "got content suggestions"
+  #puts "got content suggestions"
   m[:peers].each do |peer|
     host, port = peer.split(':')
     ip = IPAddr.new(host)
     r[:peers]  << [ip, port.to_i]
   end
+  #puts r[:peers]
 end
 def handle_content(id, base64, offset, eof, addr)
 
@@ -239,7 +241,7 @@ loop do
               id = msg[:PleaseSendContent][:id]
               offset = msg[:PleaseSendContent][:offset]
               length = msg[:PleaseSendContent][:length]
-              send_content(id, offset, length, addr)
+              handle_please_send_content(id, offset, length, addr)
             elsif msg[:Peers]
               # Handle incoming peers
               msg[:Peers][:peers].each do |peer|
@@ -257,7 +259,7 @@ loop do
               handle_content(id, base64, offset, eof, addr)
             elsif m = msg[:MaybeTheyHaveSome]
               # Handle content
-              handle_content_suggestions(m)
+              handle_maybe_they_have_some(m)
             elsif msg[:PleaseReturnThisMessage]
               # Respond with peers
               return_message(addr, msg[:PleaseReturnThisMessage])
