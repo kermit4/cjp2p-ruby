@@ -150,8 +150,8 @@ def handle_content(id, base64, offset, eof, addr)
     r[:bytes_complete] += r[:f].write(Base64.decode64(base64))
     #puts " complete #{r[:bytes_complete]} at #{offset} out of #{eof}"
     if r[:bytes_complete] == eof
-      puts "Download of #{id} finished!"
       r[:f].close()
+      puts "Download of #{id} finished!"
       $requests.delete(id)
       $sent_packets.delete(id)
       File.rename("incoming/#{id}","#{id}")
@@ -270,7 +270,7 @@ loop do
         end
       end
     rescue JSON::ParserError => e
-      puts "Error parsing JSON: #{e.message} for  #{msgs}"
+      puts "Error parsing JSON: #{e.message} for :#{data}:"
     end
   end
 end
