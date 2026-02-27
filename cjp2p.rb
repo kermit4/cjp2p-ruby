@@ -150,7 +150,6 @@ def handle_content(id, base64, offset, eof, addr)
     if (bytes_written == 4096) or bytes_written + offset == eof
       s[offset][:received] = true
       r[:bytes_complete] += bytes_written
-      puts r[:bytes_complete],bytes_written
     end
     #puts " complete #{r[:bytes_complete]} at #{offset} out of #{eof}"
     if r[:bytes_complete] == eof
