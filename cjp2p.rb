@@ -11,6 +11,7 @@ require 'fileutils'
 $peers = Set.new
 $sent_packets = {} 
 $requests = {}
+$peer_returns = {}
 
 # Add initial peers
 [
@@ -112,7 +113,11 @@ def request_content(id, offset = 0)
   end
 
   host, port = peer
-  msg = [{PleaseSendContent: { id: id, length: 4096, offset: offset }}].to_json
+  if r=$peer_returns[peer]
+    msg = [{PleaseSendContent: { id: id, length: 4096, offset: offset }},AlwaysReturned:r].to_json
+  else
+    msg = [{PleaseSendContent: { id: id, length: 4096, offset: offset }}].to_json
+  end
   $socket.send(msg, 0, host.to_s, port)
   $sent_packets[id] ||= {}
   $sent_packets[id][offset] ||= {}
@@ -231,41 +236,37 @@ loop do
   if IO.select([$socket], nil, nil, 1)
     data, addr = $socket.recvfrom(8192)
     begin
-      $peers << [addr[3], addr[1]]
+      src=[addr[3], addr[1]]
+      $peers << src
       msgs = JSON.parse(data, symbolize_names: true)
       if msgs.is_a?(Array) 
         msgs.each do |msg|
           if msg.is_a?(Hash)
             if msg[:PleaseSendPeers]
-              # Respond with peers
               send_peers(addr)
             elsif msg[:PleaseSendContent]
-              # Respond with content
               id = msg[:PleaseSendContent][:id]
               offset = msg[:PleaseSendContent][:offset]
               length = msg[:PleaseSendContent][:length]
               handle_please_send_content(id, offset, length, addr)
             elsif msg[:Peers]
-              # Handle incoming peers
               msg[:Peers][:peers].each do |peer|
-                # Parse host:port pair
                 host, port = peer.split(':')
                 ip = IPAddr.new(host)
                 $peers << [ip, port.to_i]
               end
             elsif msg[:Content]
-              # Handle content
               id = msg[:Content][:id]
               base64 = msg[:Content][:base64]
               offset = msg[:Content][:offset]
               eof = msg[:Content][:eof]
               handle_content(id, base64, offset, eof, addr)
             elsif m = msg[:MaybeTheyHaveSome]
-              # Handle content
               handle_maybe_they_have_some(m)
             elsif msg[:PleaseReturnThisMessage]
-              # Respond with peers
               return_message(addr, msg[:PleaseReturnThisMessage])
+            elsif msg[:PleaseAlwaysReturnThisMessage]
+              $peer_returns[src]=(msg[:PleaseAlwaysReturnThisMessage])
             else
               puts "unknown message #{msg}"
             end

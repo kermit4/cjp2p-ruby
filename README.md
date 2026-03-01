@@ -9,6 +9,8 @@ PleaseSendPeers send/receive
 PleaseReturnThisMessage receive
 ReturnedMessage send
 MaybeTheyHaveSome send/receive
+PleaseAlwaysReturnThisMessage receive
+AlwaysReturned send
 
 
 
