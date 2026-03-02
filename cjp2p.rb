@@ -33,11 +33,11 @@ def send_request()
   peer = $peers.to_a.sample
   host, port = peer
   #puts "requesting peers" + " from " + host.to_s + ":" + port.to_s
-  msg = [{PleaseSendPeers:{}}].to_json
+  msg = [{PleaseSendPeers:{}}]
   if r=$peer_returns[peer]
     msg += [AlwaysReturned:r]
   end
-  $socket.send(msg, 0, host.to_s, port)
+  $socket.send(msg.to_json, 0, host.to_s, port)
 end
 
 # Function to send $peers
